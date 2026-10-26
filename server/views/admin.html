@@ -1,0 +1,1216 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Echo · 后台管理</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        background: #0b0f18;
+        color: #dfe7f5;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      h1 { font-size: 16px; letter-spacing: 4px; color: #efc76a; font-weight: 500; }
+      h2 { font-size: 13px; color: #7b8bab; font-weight: 500; margin: 20px 0 8px; letter-spacing: 1px; }
+      h3 { font-size: 13px; color: #dfe7f5; font-weight: 500; margin: 14px 0 8px; }
+      .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .spacer { flex: 1; }
+      .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+      .on { background: #7ee2a8; box-shadow: 0 0 8px #7ee2a8; }
+      .off { background: #3a4560; }
+
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #1c2534; }
+      th { color: #6c7c9a; font-weight: 500; font-size: 12px; }
+      td.num { text-align: right; }
+      tbody tr:hover { background: #101725; }
+
+      .card {
+        border: 1px solid #1c2534; border-radius: 8px; padding: 12px 14px;
+        background: #0f1522; margin-bottom: 10px;
+      }
+      .card.online { border-color: #2f6b4d; }
+      .big { font-size: 15px; }
+      .dim { color: #6c7c9a; }
+      .ok { color: #7ee2a8; }
+      .warn { color: #ff9b8a; }
+      .acc { color: #efc76a; }
+      .mono-dim { color: #4a5a76; font-size: 12px; }
+
+      input, select {
+        background: #131a28; border: 1px solid #26334a; color: #dfe7f5;
+        padding: 7px 10px; border-radius: 6px; font-family: inherit; font-size: 13px;
+      }
+      input { width: 190px; }
+      input:focus, select:focus { outline: none; border-color: #4a72b8; }
+
+      button {
+        background: #1c2a40; border: 1px solid #3d5a80; color: #dfe7f5;
+        padding: 6px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 12px;
+      }
+      button:hover { background: #25375a; }
+      button.danger { border-color: #7a3b48; color: #ff9b8a; }
+      button.danger:hover { background: #3a1f28; }
+      button.tiny { padding: 3px 8px; font-size: 11px; }
+      button:disabled { opacity: 0.45; cursor: default; }
+
+      /* ---- 布局 */
+      #panel { display: none; }
+      #panel.show { display: block; }
+      .wrap { max-width: 1180px; margin: 0 auto; padding: 16px 18px 60px; }
+      .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin: 14px 0 4px; border-bottom: 1px solid #1c2534; }
+      .tab {
+        padding: 8px 14px; color: #6c7c9a; cursor: pointer; font-size: 13px;
+        border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0;
+        user-select: none;
+      }
+      .tab:hover { color: #dfe7f5; }
+      .tab.active { color: #efc76a; border-color: #1c2534; background: #0f1522; border-bottom: 1px solid #0f1522; margin-bottom: -1px; }
+      .view { display: none; padding-top: 14px; }
+      .view.active { display: block; }
+
+      /* ---- 统计卡片 */
+      .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+      .stat { border: 1px solid #1c2534; border-radius: 8px; padding: 10px 12px; background: #0f1522; }
+      .stat .v { font-size: 20px; color: #dfe7f5; }
+      .stat .k { color: #6c7c9a; font-size: 12px; }
+
+      /* ---- 登录 */
+      #login { max-width: 380px; margin: 14vh auto; }
+      #login input { width: 100%; margin-bottom: 10px; }
+      .err { color: #ff9b8a; min-height: 18px; }
+
+      /* ---- 遮罩提示 */
+      #toast {
+        position: fixed; right: 18px; bottom: 18px; z-index: 60;
+        display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+      }
+      .toast-item {
+        background: #16203a; border: 1px solid #3d5a80; border-radius: 8px;
+        padding: 10px 14px; color: #dfe7f5; max-width: 420px;
+        animation: pop .18s ease-out;
+      }
+      .toast-item.err { border-color: #7a3b48; color: #ff9b8a; }
+      @keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
+
+      /* ---- 抽屉（账号详情） */
+      #drawer {
+        position: fixed; top: 0; right: 0; width: 460px; max-width: 92vw; height: 100%;
+        background: #0d1320; border-left: 1px solid #26334a; z-index: 50;
+        overflow-y: auto; padding: 16px 18px; display: none;
+      }
+      #drawer.show { display: block; }
+
+      details > summary { cursor: pointer; }
+      .nowrap { white-space: nowrap; }
+      .chip {
+        display: inline-block; padding: 1px 7px; border-radius: 999px;
+        border: 1px solid #2a3a56; color: #7b8bab; font-size: 11px;
+      }
+      .chip.off { border-color: #7a3b48; color: #ff9b8a; }
+    </style>
+  </head>
+  <body>
+    <!-- 登录：这里的账号【不是】游戏账号，是后台自己的 -->
+    <!-- 用标准 <form> 包住：浏览器（尤其 Edge）对不在 form 里的密码框，
+         密码管理器/自动填充行为怪异，会抢焦点吞键盘输入 -->
+    <form id="login" autocomplete="on">
+      <h1>ECHO · 后台管理</h1>
+      <p class="dim" style="margin: 8px 0 16px">
+        独立于游戏账号 —— 游戏里的账号进不了这里。
+      </p>
+      <input id="u" placeholder="后台账号" autocomplete="username" />
+      <input id="p" type="password" placeholder="密码" autocomplete="current-password" />
+      <div class="err" id="err"></div>
+      <button id="go" type="submit">登 录</button>
+    </form>
+
+    <div id="panel">
+      <div class="wrap">
+        <div class="row">
+          <h1>ECHO · 后台管理</h1>
+          <span class="chip" id="who"></span>
+          <span class="spacer"></span>
+          <span class="dim" id="updated"></span>
+          <button id="toggle">暂停刷新</button>
+          <button id="out">退出</button>
+        </div>
+
+        <div class="tabs" id="tabs"></div>
+
+        <!-- 概览 -->
+        <div class="view" id="v-home"></div>
+        <!-- 账号 -->
+        <div class="view" id="v-users"></div>
+        <!-- 会话 -->
+        <div class="view" id="v-sessions"></div>
+        <!-- 房间 -->
+        <div class="view" id="v-rooms"></div>
+        <!-- 进度 -->
+        <div class="view" id="v-progress"></div>
+        <!-- 流水 -->
+        <div class="view" id="v-events"></div>
+        <!-- 胶囊 -->
+        <div class="view" id="v-capsules"></div>
+        <!-- 后台账号 -->
+        <div class="view" id="v-admins"></div>
+        <!-- 审计 -->
+        <div class="view" id="v-audit"></div>
+      </div>
+    </div>
+
+    <div id="drawer"></div>
+    <div id="toast"></div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let me = null; // 当前管理员 { username, role }
+      let tab = 'home';
+      let running = true;
+      let timer = null;
+
+      const TABS = [
+        ['home', '概览'],
+        ['users', '账号'],
+        ['sessions', '会话'],
+        ['rooms', '房间'],
+        ['progress', '进度'],
+        ['events', '流水'],
+        ['capsules', '时间胶囊'],
+        ['admins', '后台账号'],
+        ['audit', '审计'],
+      ];
+
+      /* ------------------------------------------------------------ 工具 */
+
+      const esc = (s) =>
+        String(s ?? '').replace(/[&<>"']/g, (m) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        })[m]);
+
+      const clock = (ts) => new Date(ts).toTimeString().slice(0, 8);
+      const dt = (ts) => (ts ? new Date(ts).toLocaleString('zh-CN', { hour12: false }) : '—');
+      const ago = (ms) => {
+        if (ms == null) return '从未';
+        const s = Math.floor(ms / 1000);
+        if (s < 60) return s + ' 秒前';
+        if (s < 3600) return Math.floor(s / 60) + ' 分钟前';
+        if (s < 86400) return Math.floor(s / 3600) + ' 小时前';
+        return Math.floor(s / 86400) + ' 天前';
+      };
+      const sec = (ms) => (ms == null ? '—' : (ms / 1000).toFixed(1) + 's');
+      const canWrite = () => me && me.role === 'owner';
+
+      function safeJson(s) {
+        try { return JSON.parse(s); } catch { return {}; }
+      }
+
+      function toast(text, isErr) {
+        const el = document.createElement('div');
+        el.className = 'toast-item' + (isErr ? ' err' : '');
+        el.textContent = text;
+        $('toast').appendChild(el);
+        setTimeout(() => el.remove(), isErr ? 5200 : 3000);
+      }
+
+      /** 危险操作统一走这里：把后果说清楚，再让他确认一次 */
+      function askDanger(text) {
+        return window.confirm(text);
+      }
+
+      async function api(path, opt = {}) {
+        const res = await fetch(path, {
+          credentials: 'same-origin', // 后台凭证在 HttpOnly Cookie 里，由浏览器自动带上
+          ...opt,
+          headers: { 'Content-Type': 'application/json', ...(opt.headers || {}) },
+        });
+        if (res.status === 401) throw new Error('401');
+        let data = {};
+        try { data = await res.json(); } catch { /* 空响应 */ }
+        if (!res.ok) throw new Error(data.error || '操作失败');
+        return data;
+      }
+
+      const post = (p, body) => api(p, { method: 'POST', body: JSON.stringify(body || {}) });
+      const patch = (p, body) => api(p, { method: 'PATCH', body: JSON.stringify(body || {}) });
+      const del = (p) => api(p, { method: 'DELETE' });
+
+      /* ------------------------------------------------------------ 事件名（沿用看板的中文对照） */
+
+      const NAME = {
+        login: '登录',
+        'room-created': '建了房间',
+        'room-joined': '加入房间',
+        'hub-open': '打开地图',
+        'intro-done': '看完了开场',
+        'select-ending': '打开了那封信',
+        'ending-start': '开始读结尾',
+        'ending-done': '读完结尾',
+        'capsule-saved': '写了时间胶囊',
+        'level-start': '进关',
+        'level-clear': '通关',
+        'level-leave': '离开关卡',
+        'level-respawn': '掉坑',
+        'level-collect': '拾取',
+        'level-hold': '挡雨时长',
+        'level-slide': '骑车时长',
+        'level-silence': '灯下停留',
+        'level-puzzle': '拼图耗时',
+        'level-carry': '抬花',
+        hesitation: '开场犹豫',
+        presence: '在场',
+      };
+
+      const LEVEL_NAME = {
+        level01: '01 · 出发',
+        level02: '02 · 雨',
+        level03: '03 · 走廊',
+        level04: '04 · 车棚',
+        level05: '05 · 雨巷',
+        level06: '06 · 钟楼',
+        level07: '07 · 天台',
+      };
+
+      const AUDIT_NAME = {
+        'admin.login': '登录后台',
+        'user.create': '新建账号',
+        'user.update': '改资料/停用',
+        'user.reset_password': '重置密码',
+        'user.delete': '删除账号',
+        'session.revoke': '踢下线',
+        'room.close': '关闭房间',
+        'progress.reset': '重置进度',
+        'admin.create': '新建后台账号',
+        'admin.update': '改后台账号',
+        'admin.delete': '删除后台账号',
+        'maintenance.sweep': '手动清理',
+      };
+
+      /* ------------------------------------------------------------ 登录 / 退出 */
+
+      async function doLogin() {
+        $('err').textContent = '';
+        const username = $('u').value.trim();
+        const password = $('p').value;
+        if (!username || !password) return ($('err').textContent = '都填上');
+        try {
+          const data = await post('/api/admin/login', { username, password });
+          me = data.admin;
+          boot();
+        } catch (e) {
+          $('err').textContent = e.message === '401' ? '账号或密码不对' : e.message;
+        }
+      }
+
+      function boot() {
+        $('login').style.display = 'none';
+        $('panel').classList.add('show');
+        $('who').textContent = `${me.displayName || me.username} · ${me.role === 'owner' ? '管理员' : '只读'}`;
+        renderTabs();
+        switchTab(tab);
+        clearInterval(timer);
+        timer = setInterval(() => {
+          if (running) refresh().catch(() => {});
+        }, 5000);
+      }
+
+      function signOut() {
+        return post('/api/admin/logout').finally(() => {
+          clearInterval(timer);
+          me = null;
+          $('login').style.display = '';
+          $('panel').classList.remove('show');
+          closeDrawer();
+        });
+      }
+
+      /* ------------------------------------------------------------ 标签切换 */
+
+      function renderTabs() {
+        $('tabs').innerHTML = TABS.map(
+          ([k, label]) =>
+            `<div class="tab ${k === tab ? 'active' : ''}" data-tab="${k}">${esc(label)}</div>`
+        ).join('');
+        $('tabs').onclick = (e) => {
+          const t = e.target.closest('.tab');
+          if (t) switchTab(t.dataset.tab);
+        };
+      }
+
+      function switchTab(k) {
+        tab = k;
+        document.querySelectorAll('.tab').forEach((el) => {
+          el.classList.toggle('active', el.dataset.tab === k);
+        });
+        document.querySelectorAll('.view').forEach((el) => {
+          el.classList.toggle('active', el.id === 'v-' + k);
+        });
+        refresh().catch(() => {});
+      }
+
+      /* ------------------------------------------------------------ 刷新 */
+
+      async function refresh() {
+        const loaders = {
+          home: renderHome,
+          users: renderUsers,
+          sessions: renderSessions,
+          rooms: renderRooms,
+          progress: renderProgress,
+          events: renderEvents,
+          capsules: renderCapsules,
+          admins: renderAdmins,
+          audit: renderAudit,
+        };
+        await (loaders[tab] || renderHome)();
+        $('updated').textContent = '更新于 ' + clock(Date.now());
+      }
+
+      /* ------------------------------------------------------------ 概览 */
+
+      async function renderHome() {
+        const [stats, sum] = await Promise.all([api('/api/admin/stats'), api('/api/admin/summary')]);
+        const c = stats.counts;
+        const r = stats.runtime;
+
+        $('v-home').innerHTML = `
+          <div class="stats">
+            <div class="stat"><div class="v">${c.users}</div><div class="k">账号总数${
+              c.disabledUsers ? ` · ${c.disabledUsers} 个已停用` : ''
+            }</div></div>
+            <div class="stat"><div class="v">${c.activeSessions}</div><div class="k">有效会话</div></div>
+            <div class="stat"><div class="v">${r.clients}</div><div class="k">在线连接 / ${r.liveRooms} 个房间</div></div>
+            <div class="stat"><div class="v">${c.eventsToday}</div><div class="k">今日行为 / 共 ${c.eventsTotal}</div></div>
+            <div class="stat"><div class="v">${c.clearsTotal}</div><div class="k">通关次数</div></div>
+            <div class="stat"><div class="v">${c.capsules}</div><div class="k">时间胶囊</div></div>
+            <div class="stat"><div class="v">${(c.dbBytes / 1048576).toFixed(1)}M</div><div class="k">数据库体积</div></div>
+            <div class="stat"><div class="v">${Math.floor(r.uptimeSec / 3600)}h</div><div class="k">运行 ${Math.floor(
+              (r.uptimeSec % 3600) / 60
+            )} 分 · 内存 ${r.heapMB}M</div></div>
+          </div>
+
+          <h2>在场</h2>
+          ${sum.users
+            .map(
+              (u) => `<div class="card ${u.online ? 'online' : ''}">
+                <div class="row">
+                  <span class="dot ${u.online ? 'on' : 'off'}"></span>
+                  <span class="big">${esc(u.nickname)}</span>
+                  <span class="dim">${u.role === 'bear' ? '小熊' : '小兔'} · ${esc(u.username)}</span>
+                  <span class="spacer"></span>
+                  <span class="${u.online ? 'ok' : 'dim'}">${u.online ? '在线' : '离线'}</span>
+                </div>
+                <div class="dim">
+                  此刻在：<span class="acc">${esc(u.lastWhere || '—')}</span>
+                  · 最后一次动作 ${ago(u.awayMs)} · 上次登录 ${ago(sum.now - (u.lastLoginAt || 0))}
+                </div>
+              </div>`
+            )
+            .join('')}
+
+          <h2>关卡</h2>
+          <table>
+            <thead><tr>
+              <th>关卡</th><th class="num">进入</th><th class="num">通过</th>
+              <th class="num">离开</th><th class="num">掉坑</th>
+              <th class="num">最近耗时</th><th class="num">最快</th><th>最近活动</th>
+            </tr></thead>
+            <tbody>
+              ${
+                sum.levels.length
+                  ? sum.levels
+                      .map(
+                        (l) => `<tr>
+                    <td>${esc(LEVEL_NAME[l.levelId] || l.levelId)}</td>
+                    <td class="num">${l.starts || 0}</td>
+                    <td class="num ${l.clears ? 'ok' : ''}">${l.clears || 0}</td>
+                    <td class="num ${l.leaves ? 'warn' : ''}">${l.leaves || 0}</td>
+                    <td class="num ${l.respawns >= 5 ? 'warn' : ''}">${l.respawns || 0}</td>
+                    <td class="num">${sec(l.lastDurationMs)}</td>
+                    <td class="num">${sec(l.bestMs)}</td>
+                    <td class="dim">${ago(sum.now - (l.lastAt || 0))}</td>
+                  </tr>`
+                      )
+                      .join('')
+                  : '<tr><td class="dim" colspan="8">还没有进过关卡</td></tr>'
+              }
+            </tbody>
+          </table>`;
+      }
+
+      /* ------------------------------------------------------------ 账号 */
+
+      let userQuery = '';
+
+      async function renderUsers() {
+        const q = userQuery;
+        const data = await api(`/api/admin/users?q=${encodeURIComponent(q)}&limit=100`);
+
+        if (!$('v-users').dataset.built) {
+          $('v-users').innerHTML = `
+            <div class="row">
+              <input id="uq" placeholder="搜账号或昵称" value="${esc(q)}" />
+              <button id="usearch">搜索</button>
+              <button id="uclear">清空</button>
+              <span class="spacer"></span>
+              ${canWrite() ? '<button id="unew">+ 新建账号</button>' : ''}
+            </div>
+            <div id="utable"></div>`;
+          $('v-users').dataset.built = '1';
+
+          $('usearch').onclick = () => ((userQuery = $('uq').value.trim()), refresh());
+          $('uclear').onclick = () => {
+            userQuery = '';
+            $('uq').value = '';
+            refresh();
+          };
+          $('uq').onkeydown = (e) => e.key === 'Enter' && (userQuery = $('uq').value.trim(), refresh());
+          if ($('unew')) $('unew').onclick = newUser;
+        }
+
+        $('utable').innerHTML = `
+          <table>
+            <thead><tr>
+              <th>ID</th><th>昵称</th><th>账号</th><th>角色</th><th>状态</th>
+              <th>创建</th><th>上次登录</th><th class="num">通关</th><th class="num">会话</th><th>操作</th>
+            </tr></thead>
+            <tbody>
+              ${
+                data.users.length
+                  ? data.users
+                      .map(
+                        (u) => `<tr>
+                    <td class="dim">${u.id}</td>
+                    <td>${esc(u.nickname)}</td>
+                    <td class="dim">${esc(u.username)}</td>
+                    <td>${u.role === 'bear' ? '小熊' : '小兔'}</td>
+                    <td>${
+                      u.disabled
+                        ? '<span class="chip off">已停用</span>'
+                        : `<span class="chip ${u.lastEventAt && Date.now() - u.lastEventAt < 25000 ? '' : 'off'}">${
+                            u.lastEventAt && Date.now() - u.lastEventAt < 25000 ? '在线' : '离线'
+                          }</span>`
+                    }</td>
+                    <td class="dim">${ago(Date.now() - u.createdAt)}</td>
+                    <td class="dim">${ago(Date.now() - (u.lastLoginAt || 0))}</td>
+                    <td class="num">${u.cleared}</td>
+                    <td class="num">${u.sessions}</td>
+                    <td class="nowrap">
+                      <button class="tiny" data-detail="${u.id}">详情</button>
+                      ${canWrite()
+                        ? `<button class="tiny" data-pwd="${u.id}">改密码</button>
+                           <button class="tiny" data-ban="${u.id}" data-on="${u.disabled ? 1 : 0}">${
+                             u.disabled ? '启用' : '停用'
+                           }</button>
+                           <button class="tiny danger" data-del="${u.id}">删除</button>`
+                        : ''}
+                    </td>
+                  </tr>`
+                      )
+                      .join('')
+                  : '<tr><td class="dim" colspan="10">没有匹配的账号</td></tr>'
+              }
+            </tbody>
+          </table>`;
+
+        const root = $('utable');
+        root.querySelectorAll('[data-detail]').forEach((b) => (b.onclick = () => userDetail(b.dataset.detail)));
+        root.querySelectorAll('[data-pwd]').forEach((b) => (b.onclick = () => resetPwd(b.dataset.pwd)));
+        root.querySelectorAll('[data-ban]').forEach((b) => (b.onclick = () => toggleBan(b.dataset.ban, b.dataset.on === '1')));
+        root.querySelectorAll('[data-del]').forEach((b) => (b.onclick = () => deleteUser(b.dataset.del)));
+      }
+
+      async function newUser() {
+        const username = prompt('账号名（字母数字_-，2~20 位）');
+        if (!username) return;
+        const nickname = prompt('昵称');
+        if (!nickname) return;
+        const role = prompt('角色：bear（小熊）或 rabbit（小兔）', 'bear');
+        if (!role) return;
+        const password = prompt('初始密码（至少 6 位）');
+        if (!password) return;
+
+        try {
+          await post('/api/admin/users', { username, nickname, role, password });
+          toast(`已新建账号 ${username}`);
+          refresh();
+        } catch (e) {
+          toast(e.message, true);
+        }
+      }
+
+      async function resetPwd(id) {
+        const password = prompt('新密码（至少 6 位）');
+        if (!password) return;
+        try {
+          await post(`/api/admin/users/${id}/password`, { password });
+          toast('密码已重置');
+        } catch (e) {
+          toast(e.message, true);
+        }
+      }
+
+      async function toggleBan(id, currentlyDisabled) {
+        const disabled = !currentlyDisabled;
+        if (
+          disabled &&
+          !askDanger('停用后：这个账号会立刻被踢下线，也不能再登录。\n她的进度和数据都还在。\n\n确定停用？')
+        ) {
+          return;
+        }
+        try {
+          await patch(`/api/admin/users/${id}`, { disabled });
+          toast(disabled ? '已停用，在线连接已断开' : '已启用');
+          refresh();
+        } catch (e) {
+          toast(e.message, true);
+        }
+      }
+
+      async function deleteUser(id) {
+        if (!askDanger('删除账号会连带清掉：\n· 她的关卡进度\n· 她的行为流水\n· 她写的时间胶囊\n\n这一步不可逆。确定删除？')) return;
+        try {
+          await del(`/api/admin/users/${id}`);
+          toast('已删除');
+          refresh();
+        } catch (e) {
+          toast(e.message, true);
+        }
+      }
+
+      /* ------------------------------------------------------------ 账号详情抽屉 */
+
+      async function userDetail(id) {
+        const d = await api(`/api/admin/users/${id}`);
+        const u = d.user;
+
+        $('drawer').innerHTML = `
+          <div class="row">
+            <h3>${esc(u.nickname)}</h3>
+            <span class="dim">${esc(u.username)}</span>
+            <span class="spacer"></span>
+            <button id="dclose">关闭</button>
+          </div>
+          <div class="dim">
+            ${esc(u.role === 'bear' ? '小熊' : '小兔')} · 创建于 ${dt(d.createdAt)} · 上次登录 ${dt(u.lastLoginAt)}
+          </div>
+
+          <h3>改名 / 换角色</h3>
+          <div class="row">
+            <input id="dnick" value="${esc(u.nickname)}" />
+            <select id="drole">
+              <option value="bear" ${u.role === 'bear' ? 'selected' : ''}>小熊</option>
+              <option value="rabbit" ${u.role === 'rabbit' ? 'selected' : ''}>小兔</option>
+            </select>
+            ${canWrite() ? '<button id="dsave">保存</button>' : ''}
+          </div>
+
+          <h3>会话（${d.sessions.length}）</h3>
+          ${
+            d.sessions.length
+              ? `<table><thead><tr><th>建立于</th><th>过期</th><th></th></tr></thead><tbody>
+                  ${d.sessions
+                    .map(
+                      (s) => `<tr>
+                      <td>${dt(s.createdAt)}</td>
+                      <td class="dim">${dt(s.expiresAt)}</td>
+                      <td>${
+                        canWrite()
+                          ? `<button class="tiny danger" data-rv="${esc(s.token)}">踢下线</button>`
+                          : ''
+                      }</td>
+                    </tr>`
+                    )
+                    .join('')}
+                 </tbody></table>`
+              : '<div class="dim">没有有效会话</div>'
+          }
+
+          <h3>关卡进度</h3>
+          ${
+            d.progress.length
+              ? `<div id="dprogress">${d.progress
+                  .map(
+                    (p) => `<div class="row">
+                    <span>${esc(LEVEL_NAME[p.level_id] || p.level_id)}</span>
+                    <span class="spacer"></span>
+                    <span class="${p.cleared_at ? 'ok' : 'dim'}">${
+                      p.cleared_at ? '已通关 · ' + dt(p.cleared_at) : '未通关'
+                    }</span>
+                    ${
+                      canWrite()
+                        ? `<button class="tiny danger" data-reset="${esc(p.level_id)}">重来</button>`
+                        : ''
+                    }
+                  </div>`
+                  )
+                  .join('')}</div>
+                  ${
+                    canWrite()
+                      ? '<div class="row" style="margin-top:8px"><button class="tiny danger" id="resetall">清空全部进度</button></div>'
+                      : ''
+                  }`
+              : '<div class="dim">还没有进度记录</div>'
+          }
+
+          <h3>最近行为</h3>
+          <div style="max-height:40vh;overflow:auto">
+            ${
+              d.recentEvents.length
+                ? `<table><thead><tr><th>时间</th><th>事件</th><th>数据</th></tr></thead><tbody>
+                    ${d.recentEvents
+                      .map((e) => {
+                        const data = safeJson(e.data);
+                        const bits = Object.entries(data)
+                          .filter(([k]) => k !== 'at')
+                          .map(([k, v]) => `${k}=${typeof v === 'number' && /Ms$/.test(k) ? (v / 1000).toFixed(1) + 's' : v}`)
+                          .join('  ');
+                        return `<tr>
+                          <td class="dim nowrap">${clock(e.created_at)}</td>
+                          <td class="acc">${esc(NAME[e.name] || e.name)}</td>
+                          <td class="dim">${esc(bits)}</td>
+                        </tr>`;
+                      })
+                      .join('')}
+                   </tbody></table>`
+                : '<div class="dim">没有记录</div>'
+            }
+          </div>`;
+
+        $('drawer').classList.add('show');
+        $('dclose').onclick = closeDrawer;
+        if ($('dsave')) {
+          $('dsave').onclick = async () => {
+            try {
+              await patch(`/api/admin/users/${id}`, {
+                nickname: $('dnick').value.trim(),
+                role: $('drole').value,
+              });
+              toast('已保存');
+              refresh();
+            } catch (e) {
+              toast(e.message, true);
+            }
+          };
+        }
+        $('drawer')
+          .querySelectorAll('[data-rv]')
+          .forEach((b) => (b.onclick = () => revokeSession(b.dataset.rv)));
+        $('drawer')
+          .querySelectorAll('[data-reset]')
+          .forEach(
+            (b) =>
+              (b.onclick = async () => {
+                if (!askDanger('这一关的进度会清空。确定？')) return;
+                await post('/api/admin/progress/reset', { userId: id, levelId: b.dataset.reset });
+                toast('已重置这一关');
+                closeDrawer();
+              })
+          );
+        if ($('resetall')) {
+          $('resetall').onclick = async () => {
+            if (!askDanger('这个人的【全部】关卡进度都会清空，相当于从头再来一次。确定？')) return;
+            await post('/api/admin/progress/reset', { userId: id });
+            toast('已重置全部进度');
+            closeDrawer();
+          };
+        }
+      }
+
+      function closeDrawer() {
+        $('drawer').classList.remove('show');
+      }
+
+      /* ------------------------------------------------------------ 会话 */
+
+      async function renderSessions() {
+        const d = await api('/api/admin/sessions');
+
+        $('v-sessions').innerHTML = `
+          <div class="row">
+            <div class="dim">正在生效的登录凭证。踢掉之后对方要重新登录 —— 游戏里的token 也会立刻失效。</div>
+            <span class="spacer"></span>
+            ${canWrite() && d.sessions.length ? '<button class="danger" id="rvall">踢掉全部</button>' : ''}
+          </div>
+          <table>
+            <thead><tr><th>昵称</th><th>账号</th><th>建立于</th><th>过期</th><th>Token</th><th></th></tr></thead>
+            <tbody>
+              ${
+                d.sessions.length
+                  ? d.sessions
+                      .map(
+                        (s) => `<tr>
+                    <td>${esc(s.nickname)}</td>
+                    <td class="dim">${esc(s.username)}</td>
+                    <td>${dt(s.createdAt)}</td>
+                    <td class="dim">${ago(s.expiresAt - d.now)}后过期</td>
+                    <td class="mono-dim">${esc(String(s.token).slice(0, 10))}…</td>
+                    <td>${canWrite() ? `<button class="tiny danger" data-rv="${esc(s.token)}">踢下线</button>` : ''}</td>
+                  </tr>`
+                      )
+                      .join('')
+                  : '<tr><td class="dim" colspan="6">当前没有有效会话</td></tr>'
+              }
+            </tbody>
+          </table>`;
+
+        $('v-sessions')
+          .querySelectorAll('[data-rv]')
+          .forEach((b) => (b.onclick = () => revokeSession(b.dataset.rv)));
+        if ($('rvall')) {
+          $('rvall').onclick = async () => {
+            if (!askDanger('所有人都会被踢下线，包括你自己可能开着的其它标签页。\n\n确定？')) return;
+            for (const s of d.sessions) await revokeSession(s.token, true);
+            toast('已全部踢下线');
+            refresh();
+          };
+        }
+      }
+
+      async function revokeSession(token, quiet) {
+        try {
+          await post('/api/admin/sessions/revoke', { token });
+          if (!quiet) toast('已踢下线');
+          refresh();
+        } catch (e) {
+          toast(e.message, true);
+        }
+      }
+
+      /* ------------------------------------------------------------ 房间 */
+
+      async function renderRooms() {
+        const d = await api('/api/admin/rooms');
+
+        $('v-rooms').innerHTML = `
+          <h3>进行中（${d.live.length}）</h3>
+          <table>
+            <thead><tr><th>房间号</th><th>房主</th><th>客人</th><th>最近活动</th><th></th></tr></thead>
+            <tbody>
+              ${
+                d.live.length
+                  ? d.live
+                      .map(
+                        (r) => `<tr>
+                    <td class="acc">${esc(r.code)}</td>
+                    <td>${esc(r.owner || '—')}</td>
+                    <td>${esc(r.guest || '—')}</td>
+                    <td class="dim">${ago(d.now - r.lastActive)}</td>
+                    <td>${
+                      canWrite()
+                        ? `<button class="tiny danger" data-close="${esc(r.code)}">关闭并踢出</button>`
+                        : ''
+                    }</td>
+                  </tr>`
+                      )
+                      .join('')
+                  : '<tr><td class="dim" colspan="5">现在没有人在房间里</td></tr>'
+              }
+            </tbody>
+          </table>
+
+          <h3>数据库记录（未关闭的）</h3>
+          <table>
+            <thead><tr><th>房间号</th><th>状态</th><th>房主</th><th>客人</th><th>创建</th><th>更新</th></tr></thead>
+            <tbody>
+              ${
+                d.db.length
+                  ? d.db
+                      .map(
+                        (r) => `<tr>
+                    <td class="acc">${esc(r.code)}</td>
+                    <td class="dim">${esc(r.status)}</td>
+                    <td>${esc(r.ownerName || '—')}</td>
+                    <td>${esc(r.guestName || '—')}</td>
+                    <td class="dim">${ago(d.now - r.createdAt)}</td>
+                    <td class="dim">${ago(d.now - r.updatedAt)}</td>
+                  </tr>`
+                      )
+                      .join('')
+                  : '<tr><td class="dim" colspan="6">没有记录</td></tr>'
+              }
+            </tbody>
+          </table>`;
+
+        $('v-rooms')
+          .querySelectorAll('[data-close]')
+          .forEach(
+            (b) =>
+              (b.onclick = async () => {
+                if (!askDanger(`关闭房间 ${b.dataset.close}：里面两个人都会被踢出去。\n\n确定？`)) return;
+                await post(`/api/admin/rooms/${b.dataset.close}/close`);
+                toast('房间已关闭');
+                refresh();
+              })
+          );
+      }
+
+      /* ------------------------------------------------------------ 进度 */
+
+      async function renderProgress() {
+        const [users, sum] = await Promise.all([
+          api('/api/admin/users?limit=100'),
+          api('/api/admin/summary'),
+        ]);
+
+        $('v-progress').innerHTML = `
+          <div class="dim">按人直接重置某关，或者清空全部 —— 她想重头再看一遍开场的时候用得上。</div>
+          ${users.users
+            .map(
+              (u) => `<div class="card">
+                <div class="row">
+                  <span class="big">${esc(u.nickname)}</span>
+                  <span class="dim">${esc(u.username)} · 已通关 ${u.cleared} 关</span>
+                  <span class="spacer"></span>
+                  <button class="tiny" data-detail="${u.id}">详情</button>
+                  ${
+                    canWrite() && u.cleared
+                      ? `<button class="tiny danger" data-resetall="${u.id}">清空全部进度</button>`
+                      : ''
+                  }
+                </div>
+              </div>`
+            )
+            .join('')}
+
+          <h2>各关流水统计（取自行为事件）</h2>
+          <table>
+            <thead><tr><th>关卡</th><th class="num">进入</th><th class="num">通过</th><th class="num">掉坑</th><th>最近活动</th></tr></thead>
+            <tbody>
+              ${
+                sum.levels.length
+                  ? sum.levels
+                      .map(
+                        (l) => `<tr>
+                    <td>${esc(LEVEL_NAME[l.levelId] || l.levelId)}</td>
+                    <td class="num">${l.starts || 0}</td>
+                    <td class="num ${l.clears ? 'ok' : ''}">${l.clears || 0}</td>
+                    <td class="num ${l.respawns >= 5 ? 'warn' : ''}">${l.respawns || 0}</td>
+                    <td class="dim">${ago(sum.now - (l.lastAt || 0))}</td>
+                  </tr>`
+                      )
+                      .join('')
+                  : '<tr><td class="dim" colspan="5">还没有进过关卡</td></tr>'
+              }
+            </tbody>
+          </table>`;
+
+        $('v-progress')
+          .querySelectorAll('[data-detail]')
+          .forEach((b) => (b.onclick = () => userDetail(b.dataset.detail)));
+        $('v-progress')
+          .querySelectorAll('[data-resetall]')
+          .forEach(
+            (b) =>
+              (b.onclick = async () => {
+                if (!askDanger('清空这个人的全部关卡进度。确定？')) return;
+                await post('/api/admin/progress/reset', { userId: b.dataset.resetall });
+                toast('已清空');
+                refresh();
+              })
+          );
+      }
+
+      /* ------------------------------------------------------------ 流水 */
+
+      let evFilter = { userId: '', name: '' };
+
+      async function renderEvents() {
+        const qs = new URLSearchParams({ limit: '300' });
+        if (evFilter.userId) qs.set('userId', evFilter.userId);
+        if (evFilter.name) qs.set('name', evFilter.name);
+        const [d, users] = await Promise.all([
+          api('/api/admin/events?' + qs),
+          api('/api/admin/users?limit=100'),
+        ]);
+
+        if (!$('v-events').dataset.built) {
+          $('v-events').innerHTML = `
+            <div class="row">
+              <select id="evuser"></select>
+              <select id="evname"></select>
+              <button id="evapply">筛选</button>
+              <button id="evclear">清空</button>
+              <span class="spacer"></span>
+              <button id="evcsv">导出 CSV</button>
+            </div>
+            <div id="evtable"></div>`;
+          $('v-events').dataset.built = '1';
+
+          $('evapply').onclick = () => {
+            evFilter = { userId: $('evuser').value, name: $('evname').value };
+            refresh();
+          };
+          $('evclear').onclick = () => {
+            evFilter = { userId: '', name: '' };
+            $('evuser').value = '';
+            $('evname').value = '';
+            refresh();
+          };
+          $('evcsv').onclick = () => exportCsv(lastEvents);
+        }
+
+        const uOpt = users.users.map((u) => `<option value="${u.id}">${esc(u.nickname)}（${esc(u.username)}）</option>`);
+        $('evuser').innerHTML = '<option value="">全部人</option>' + uOpt.join('');
+        $('evuser').value = evFilter.userId;
+        $('evname').innerHTML =
+          '<option value="">全部事件</option>' +
+          d.names.map((n) => `<option value="${esc(n.name)}">${esc(NAME[n.name] || n.name)}（${n.n}）</option>`).join('');
+        $('evname').value = evFilter.name;
+
+        lastEvents = d.events;
+
+        $('evtable').innerHTML = `
+          <div class="dim" style="margin:8px 0">共 ${d.events.length} 条</div>
+          <table>
+            <thead><tr><th>时间</th><th>谁</th><th>事件</th><th>数据</th></tr></thead>
+            <tbody>
+              ${
+                d.events.length
+                  ? d.events
+                      .map((e) => {
+                        const data = safeJson(e.data);
+                        const who = users.users.find((u) => u.id === e.user_id);
+                        const bits = Object.entries(data)
+                          .filter(([k]) => k !== 'at')
+                          .map(([k, v]) => `${k}=${typeof v === 'number' && /Ms$/.test(k) ? (v / 1000).toFixed(1) + 's' : v}`)
+                          .join('  ');
+                        return `<tr>
+                      <td class="dim nowrap">${clock(e.created_at)}</td>
+                      <td>${who ? esc(who.nickname) : '<span class="dim">未登录</span>'}</td>
+                      <td class="acc">${esc(NAME[e.name] || e.name)}</td>
+                      <td class="dim">${esc(bits)}</td>
+                    </tr>`;
+                      })
+                      .join('')
+                  : '<tr><td class="dim" colspan="4">没有匹配的记录</td></tr>'
+              }
+            </tbody>
+          </table>`;
+      }
+
+      let lastEvents = [];
+
+      function exportCsv(rows) {
+        if (!rows.length) return toast('没有可导出的记录', true);
+        const head = ['时间', '用户ID', '事件', '数据'];
+        const body = rows.map((e) => [
+          new Date(e.created_at).toLocaleString('zh-CN', { hour12: false }),
+          e.user_id ?? '',
+          e.name,
+          e.data,
+        ]);
+        const csv = [head, ...body]
+          .map((r) => r.map((c) => '"' + String(c).replace(/"/g, '""') + '"').join(','))
+          .join('\r\n');
+        // BOM：不加的话 Excel 打开是乱码
+        const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `echo-events-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+
+      /* ------------------------------------------------------------ 时间胶囊 */
+
+      async function renderCapsules() {
+        const d = await api('/api/admin/capsules');
+
+        $('v-capsules').innerHTML =
+          `<div class="dim">知道她写了就够了 —— 正文默认收起，一年之后再一起打开。</div>` +
+          (d.capsules.length
+            ? d.capsules
+                .map((c) => {
+                  const left = Math.max(0, Math.ceil((c.openAt - d.now) / 86400000));
+                  return `<div class="card">
+                    <div class="row">
+                      <span class="acc">${esc(c.nickname || c.username || '匿名')}</span>
+                      <span class="dim">写于 ${ago(d.now - c.createdAt)}</span>
+                      <span class="spacer"></span>
+                      <span class="${left ? 'dim' : 'ok'}">${left ? '封存中 · 还有 ' + left + ' 天' : '已到期'}</span>
+                    </div>
+                    <details style="margin-top:8px">
+                      <summary class="dim" style="cursor:pointer">展开内容（到期前请忍住）</summary>
+                      <div class="big" style="margin-top:8px;white-space:pre-wrap">${esc(c.text)}</div>
+                    </details>
+                  </div>`;
+                })
+                .join('')
+            : '<div class="card dim">还没有时间胶囊</div>');
+      }
+
+      /* ------------------------------------------------------------ 后台账号 */
+
+      async function renderAdmins() {
+        const d = await api('/api/admin/admins');
+
+        $('v-admins').innerHTML = `
+          <div class="row">
+            <div class="dim">这些账号【独立于】游戏账号 —— 游戏里的人再怎么折腾也进不了后台。</div>
+            <span class="spacer"></span>
+            ${canWrite() ? '<button id="anew">+ 新建后台账号</button>' : ''}
+          </div>
+          <table>
+            <thead><tr><th>ID</th><th>名字</th><th>账号</th><th>角色</th><th>状态</th><th>上次登录</th><th>操作</th></tr></thead>
+            <tbody>
+              ${d.admins
+                .map(
+                  (a) => `<tr>
+                    <td class="dim">${a.id}</td>
+                    <td>${esc(a.displayName)}</td>
+                    <td class="dim">${esc(a.username)}</td>
+                    <td>${a.role === 'owner' ? '<span class="acc">管理员</span>' : '<span class="chip">只读</span>'}</td>
+                    <td>${a.disabled ? '<span class="chip off">已停用</span>' : '<span class="chip">正常</span>'}</td>
+                    <td class="dim">${ago(Date.now() - (a.lastLoginAt || 0))}</td>
+                    <td class="nowrap">
+                      ${
+                        canWrite()
+                          ? `<button class="tiny" data-apwd="${a.id}">改密码</button>
+                             ${
+                               a.id === me.id
+                                 ? '<span class="dim">（自己）</span>'
+                                 : `<button class="tiny" data-aban="${a.id}" data-on="${a.disabled ? 1 : 0}">${
+                                     a.disabled ? '启用' : '停用'
+                                   }</button>
+                                    <button class="tiny danger" data-adel="${a.id}">删除</button>`
+                             }`
+                          : ''
+                      }
+                    </td>
+                  </tr>`
+                )
+                .join('')}
+            </tbody>
+          </table>`;
+
+        if ($('anew')) $('anew').onclick = newAdmin;
+        const root = $('v-admins');
+        root.querySelectorAll('[data-apwd]').forEach((b) => (b.onclick = () => adminPwd(b.dataset.apwd)));
+        root.querySelectorAll('[data-aban]').forEach((b) => (b.onclick = () => adminBan(b.dataset.aban, b.dataset.on === '1')));
+        root.querySelectorAll('[data-adel]').forEach((b) => (b.onclick = () => adminDel(b.dataset.adel)));
+      }
+
+      async function newAdmin() {
+        const username = prompt('后台账号名（字母数字_-，2~20 位）');
+        if (!username) return;
+        const displayName = prompt('显示名字', username);
+        const role = confirm('给管理员权限？\n\n【确定】= 管理员（能删号、改密码）\n【取消】= 只读（只能看数据）')
+          ? 'owner'
+          : 'viewer';
+        const password = prompt('密码（至少 8 位）');
+        if (!password) return;
+        try {
+          await post('/api/admin/admins', { username, displayName: displayName || username, role, password });
+          toast('已新建后台账号');
+          refresh();
+        } catch (e) {
+          toast(e.message, true);
+        }
+      }
+
+      async function adminPwd(id) {
+        const password = prompt('新密码（至少 8 位）');
+        if (!password) return;
+        try {
+          await patch(`/api/admin/admins/${id}`, { password });
+          toast('密码已改');
+        } catch (e) {
+          toast(e.message, true);
+        }
+      }
+
+      async function adminBan(id, currentlyDisabled) {
+        try {
+          await patch(`/api/admin/admins/${id}`, { disabled: !currentlyDisabled });
+          toast(currentlyDisabled ? '已启用' : '已停用');
+          refresh();
+        } catch (e) {
+          toast(e.message, true);
+        }
+      }
+
+      async function adminDel(id) {
+        if (!askDanger('删除这个后台账号？\n\n注意：至少要留一个管理员账号，不然你就把自己关在门外了。')) return;
+        try {
+          await del(`/api/admin/admins/${id}`);
+          toast('已删除');
+          refresh();
+        } catch (e) {
+          toast(e.message, true);
+        }
+      }
+
+      /* ------------------------------------------------------------ 审计 */
+
+      async function renderAudit() {
+        const d = await api('/api/admin/audit?limit=200');
+
+        $('v-audit').innerHTML = `
+          <div class="dim">后台做过的每一件"动手的事"都在这儿 —— 密码内容永远不会被记下来。</div>
+          <table>
+            <thead><tr><th>时间</th><th>谁</th><th>动作</th><th>对象</th><th>细节</th><th>IP</th></tr></thead>
+            <tbody>
+              ${
+                d.logs.length
+                  ? d.logs
+                      .map((l) => {
+                        const detail = safeJson(l.detail);
+                        const bits = [];
+                        if (detail.body && typeof detail.body === 'object') {
+                          for (const [k, v] of Object.entries(detail.body)) bits.push(`${k}=${v}`);
+                        }
+                        if (detail.query && typeof detail.query === 'object') {
+                          for (const [k, v] of Object.entries(detail.query)) {
+                            if (v) bits.push(`${k}=${v}`);
+                          }
+                        }
+                        return `<tr>
+                      <td class="dim nowrap">${dt(l.created_at)}</td>
+                      <td>${esc(l.admin_name)}</td>
+                      <td class="acc">${esc(AUDIT_NAME[l.action] || l.action)}</td>
+                      <td>${esc(l.target || '—')}</td>
+                      <td class="dim">${esc(bits.join(' '))}</td>
+                      <td class="mono-dim">${esc(l.ip || '—')}</td>
+                    </tr>`;
+                      })
+                      .join('')
+                  : '<tr><td class="dim" colspan="6">还没有操作记录</td></tr>'
+              }
+            </tbody>
+          </table>`;
+      }
+
+      /* ------------------------------------------------------------ 绑定 */
+
+      $('login').onsubmit = (e) => {
+        e.preventDefault(); // 不真发表单请求，仍走 doLogin 的 fetch
+        doLogin();
+      };
+      $('u').onkeydown = (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault(); // 阻止 form 原生提交，这里只把焦点交给密码框
+          $('p').focus();
+        }
+      };
+      $('out').onclick = signOut;
+      $('toggle').onclick = () => {
+        running = !running;
+        $('toggle').textContent = running ? '暂停刷新' : '继续刷新';
+      };
+      document.addEventListener('keydown', (e) => e.key === 'Escape' && closeDrawer());
+
+      // 进页面先看 sessions 里还有没有活着的管理会话
+      api('/api/admin/me')
+        .then((d) => {
+          me = d.admin;
+          boot();
+        })
+        .catch(() => {});
+    </script>
+  </body>
+</html>

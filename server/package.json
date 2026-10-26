@@ -1,0 +1,16 @@
+{
+  "name": "echo-relay-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "回声 · 中继服务器（只做房间管理与消息中继，不做游戏模拟）",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js --dev",
+    "keepalive": "node scripts/keepalive.mjs"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  }
+}

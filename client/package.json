@@ -1,0 +1,17 @@
+{
+  "name": "echo-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "回声 · 双人联机闯关",
+  "scripts": {
+    "dev": "node -e \"console.log('前端已并入 server：请到 server 目录运行 npm run dev（仍然是 8787 一个端口，带热更新）')\"",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

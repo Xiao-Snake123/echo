@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#0d1220" />
+
+    <!-- 这个链接是给一个人看的：不要进搜索引擎，不要被抓取到 -->
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+
+    <title>Echo</title>
+
+    <style>
+      /* ==================================================== 设计变量 */
+      :root {
+        --bg: #0d1220;
+        --panel: #0f1522;
+        --field: #131c2e;
+        --line: #2a3a56;
+        --line-soft: #1e2a40;
+        --text: #dfe7f5;
+        --dim: #7b8bab;
+        --faint: #4a5a76;
+        --accent: #efc76a;
+        --blue: #4a72b8;
+        --ok: #7ee2a8;
+        --warn: #ff9b8a;
+        --radius: 14px;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--text);
+        font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+        /* 移动端关键：禁止滚动/回弹/长按选中，否则在微信里会拖页面 */
+        touch-action: none;
+        overscroll-behavior: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      /* 背景氛围层：恒定的深色渐变 + 可选的 bg.jpg。
+         图片没给时（onerror 自删）渐变仍然在，页面不会空。 */
+      #scene-bg {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        background:
+          radial-gradient(1200px 700px at 50% -12%, rgba(74, 114, 184, 0.16), transparent 58%),
+          radial-gradient(900px 600px at 50% 112%, rgba(38, 52, 82, 0.5), transparent 52%),
+          var(--bg);
+      }
+      #scene-bg img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0.2;
+      }
+
+      #game {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #game canvas {
+        display: block;
+        touch-action: none;
+      }
+
+      /* ---------------------------------------------------- 加载兜底 */
+      #boot {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        background: var(--bg);
+        color: var(--faint);
+        font-size: 13px;
+        letter-spacing: 2px;
+        z-index: 10;
+        transition: opacity 0.5s ease;
+      }
+
+      #boot.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      #boot .dots::after {
+        content: "";
+        animation: dots 1.4s steps(4, end) infinite;
+      }
+
+      @keyframes dots {
+        0% { content: ""; }
+        25% { content: "."; }
+        50% { content: ".."; }
+        75% { content: "..."; }
+      }
+
+      /* ---------------------------------------------------- DOM 表单层 */
+      .overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(8, 12, 22, 0.9);
+        backdrop-filter: blur(6px);
+        z-index: 20;
+        padding: 24px;
+      }
+
+      .overlay.hidden {
+        display: none;
+      }
+
+      .panel {
+        width: 100%;
+        max-width: 340px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 26px 24px;
+        background: var(--panel);
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius);
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+      }
+
+      .panel h2 {
+        margin: 0 0 2px;
+        font-size: 20px;
+        font-weight: 400;
+        color: var(--text);
+        letter-spacing: 4px;
+        text-align: center;
+      }
+
+      .panel p.sub {
+        margin: 0 0 6px;
+        font-size: 12px;
+        color: var(--dim);
+        text-align: center;
+        line-height: 1.7;
+      }
+
+      /* 标题 Logo 位：图片来了盖在文字上，没来就露出文字 */
+      .logo {
+        position: relative;
+        height: 92px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 4px;
+      }
+      .logo img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .logo .logo-fallback {
+        font-size: 30px;
+        letter-spacing: 12px;
+        text-indent: 12px;
+        color: var(--text);
+        opacity: 0.92;
+      }
+
+      .panel input,
+      .panel textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 14px 16px;
+        font-size: 16px; /* 小于 16px 时 iOS 会自动放大页面 */
+        font-family: inherit;
+        color: var(--text);
+        background: var(--field);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        outline: none;
+        -webkit-appearance: none;
+        transition: border-color 0.15s, box-shadow 0.15s;
+      }
+
+      .panel input:focus,
+      .panel textarea:focus {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px rgba(74, 114, 184, 0.18);
+      }
+
+      .panel input::placeholder,
+      .panel textarea::placeholder {
+        color: var(--faint);
+      }
+
+      .panel textarea {
+        line-height: 1.7;
+        resize: none;
+      }
+
+      /* 房间号输入：大字号 + 字间距，方便念给对方听 */
+      .panel input.code {
+        text-align: center;
+        font-size: 30px;
+        letter-spacing: 12px;
+        text-indent: 12px;
+        padding: 16px;
+      }
+
+      .btn {
+        padding: 14px 16px;
+        font-size: 16px;
+        font-family: inherit;
+        color: var(--text);
+        background: linear-gradient(180deg, #22334f, #1a2840);
+        border: 1px solid #3d5a80;
+        border-radius: 10px;
+        cursor: pointer;
+        -webkit-appearance: none;
+        transition: transform 0.06s, border-color 0.15s, background 0.15s;
+      }
+
+      .btn:hover {
+        border-color: var(--blue);
+        background: linear-gradient(180deg, #2a3f60, #20324e);
+      }
+
+      .btn:active {
+        transform: translateY(1px);
+      }
+
+      .btn:disabled {
+        opacity: 0.55;
+        cursor: default;
+      }
+
+      .btn.primary {
+        background: linear-gradient(180deg, #6a5a28, #4f4118);
+        border-color: #8a7434;
+        color: #f6e7b6;
+      }
+
+      .btn.primary:hover {
+        border-color: var(--accent);
+        background: linear-gradient(180deg, #7a682f, #5a4a1e);
+      }
+
+      .btn.ghost {
+        background: transparent;
+        border-color: var(--line);
+        color: var(--dim);
+        font-size: 14px;
+        padding: 11px 16px;
+      }
+
+      .btn.ghost:hover {
+        color: var(--text);
+        border-color: var(--faint);
+      }
+
+      .err {
+        color: var(--warn);
+        font-size: 13px;
+        text-align: center;
+        min-height: 16px;
+        line-height: 1.6;
+      }
+
+      .err.hidden {
+        visibility: hidden;
+      }
+
+      /* 房间号展示 */
+      .code-big {
+        position: relative;
+        font-size: 54px;
+        letter-spacing: 14px;
+        text-indent: 14px;
+        text-align: center;
+        color: var(--accent);
+        margin: 6px 0 4px;
+        text-shadow: 0 0 24px rgba(239, 199, 106, 0.35);
+      }
+      .code-big::before,
+      .code-big::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        width: 46px;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, var(--line));
+      }
+      .code-big::before { left: 0; }
+      .code-big::after { right: 0; transform: rotate(180deg); }
+
+      /* 时间胶囊：一块"信纸"的错觉 */
+      #capsule .panel {
+        border-color: rgba(239, 199, 106, 0.22);
+      }
+      #capsule textarea {
+        border-style: dashed;
+        border-color: var(--line);
+        background: rgba(19, 28, 46, 0.6);
+      }
+
+      #busy .spin {
+        width: 26px;
+        height: 26px;
+        border: 2px solid var(--line);
+        border-top-color: #6ea8fe;
+        border-radius: 50%;
+        animation: spin 0.9s linear infinite;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="scene-bg">
+      <img src="./assets/bg.jpg" alt="" onerror="this.remove()" />
+    </div>
+
+    <div id="game"></div>
+
+    <div id="boot">
+      <div>ECHO · 正在建立连接<span class="dots"></span></div>
+    </div>
+
+    <!-- 登录 -->
+    <div id="login" class="overlay hidden">
+      <div class="panel">
+        <div class="logo">
+          <img src="./assets/logo.png" alt="" onerror="this.remove()" />
+          <span class="logo-fallback">E C H O</span>
+        </div>
+        <p class="sub">登录后即可创建或加入一局</p>
+        <input id="login-user" type="text" placeholder="账号" autocomplete="username" />
+        <input id="login-pass" type="password" placeholder="密码" autocomplete="current-password" />
+        <div id="login-error" class="err hidden"></div>
+        <button id="login-submit" class="btn primary">登 录</button>
+      </div>
+    </div>
+
+    <!-- 输入房间号 -->
+    <div id="join" class="overlay hidden">
+      <div class="panel">
+        <h2>加入房间</h2>
+        <p class="sub">输入对方给你的 4 位房间号</p>
+        <input id="join-code" class="code" type="text" inputmode="latin" placeholder="––––" maxlength="4" />
+        <div id="join-error" class="err hidden"></div>
+        <button id="join-submit" class="btn primary">加入房间</button>
+        <button id="join-cancel" class="btn ghost">返回</button>
+      </div>
+    </div>
+
+    <!-- 展示房间号 -->
+    <div id="roomcode" class="overlay hidden">
+      <div class="panel">
+        <h2>房间已创建</h2>
+        <p class="sub">把这个号码告诉她，让她在「加入房间」里输入</p>
+        <div id="roomcode-value" class="code-big">----</div>
+        <button id="roomcode-copy" class="btn primary">复制邀请链接</button>
+        <button id="roomcode-cancel" class="btn ghost">返回</button>
+      </div>
+    </div>
+
+    <!-- 时间胶囊 -->
+    <div id="capsule" class="overlay hidden">
+      <div class="panel">
+        <h2>时间胶囊</h2>
+        <p class="sub">写一句话给一年后的自己<br />一年后的今天，它会回来找你</p>
+        <textarea id="capsule-text" rows="5" maxlength="200" placeholder="写什么都行。"></textarea>
+        <div id="capsule-error" class="err hidden"></div>
+        <button id="capsule-submit" class="btn primary">封 存</button>
+        <button id="capsule-cancel" class="btn ghost">这次先不写</button>
+      </div>
+    </div>
+
+    <!-- 连接中 -->
+    <div id="busy" class="overlay hidden">
+      <div class="panel" style="align-items: center; background: transparent; border: none; box-shadow: none">
+        <div class="spin"></div>
+        <div id="busy-text" style="color: var(--dim); font-size: 13px">正在连接…</div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
