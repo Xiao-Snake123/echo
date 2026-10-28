@@ -193,7 +193,8 @@ export default class LocalPlayer extends Character {
 
   update(now) {
     // 坐在车上时位置归 ScooterSystem 管，这里一步都不能动（见 mounted 注释）
-    if (this.mounted) return;
+    // 在路边等车（第 4 关接人阶段）同理：站着等，输入全部忽略
+    if (this.mounted || this.waitBoard) return;
 
     const { left, right, jump, skill } = this.inputs;
 

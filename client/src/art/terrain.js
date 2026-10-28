@@ -171,6 +171,27 @@ export function paintPlatform(scene, p, level) {
   const g = scene.add.graphics().setDepth(2);
   const rnd = rng(Math.round(p.x * 3 + p.y));
 
+  // 沥青夜路（第 4 关的电动车道）：没有草，只有路缘和磨损的灰
+  if (p.mat === 'road' || level.groundMat === 'road') {
+    vGradient(g, p.x, p.y, p.w, p.h, 0x2c3038, 0x13151b);
+    g.fillStyle(0x525a6e, 0.9);
+    g.fillRect(p.x, p.y, p.w, 3); // 路缘亮线
+    g.fillStyle(0x1d2019, 0.9);
+    g.fillRect(p.x, p.y + 3, p.w, 2);
+    // 磨损补丁
+    for (let i = 0; i < Math.floor(p.w / 300); i++) {
+      const sx = p.x + rnd() * (p.w - 60);
+      g.fillStyle(0x1a1d24, 0.5);
+      g.fillEllipse(sx, p.y + 26 + rnd() * 60, 40 + rnd() * 50, 8 + rnd() * 8);
+    }
+    // 底部渐暗
+    for (let i = 0; i < 8; i++) {
+      g.fillStyle(0x05080f, 0.055);
+      g.fillRect(p.x, p.y + p.h - 48 + i * 6, p.w, 7);
+    }
+    return g;
+  }
+
   if (isWall) {
     // 石墙：砖缝 + 顶部长草
     vGradient(g, p.x, p.y, p.w, p.h, 0x4a5a4c, 0x1b241f);

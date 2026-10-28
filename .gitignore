@@ -19,8 +19,8 @@ server/out.log
 .env.*
 *.pem
 
-# 临时调试产物
-.testtools/*.png
+# 临时调试产物（测试脚本不入库）
+.testtools/
 client/vite.config.js.timestamp-*.mjs
 .testtools/cloud-ref/
 .testtools/level01-art/

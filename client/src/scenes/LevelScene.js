@@ -185,7 +185,8 @@ export default class LevelScene extends Phaser.Scene {
 
   /** 平台外观：纯代码绘制（渐变 / 草边 / 砖缝 / 暗角），形状严格等于物理矩形 */
   _paintPlatform(p) {
-    paintDecor(this, p, this.level);
+    // 沥青夜路不铺树影/木箱/长椅 —— 路边的氛围由电动车自己的路灯和摊子负责
+    if (p.mat !== 'road') paintDecor(this, p, this.level);
     paintPlatform(this, p, this.level);
   }
 

@@ -77,6 +77,15 @@ const DEFAULTS = {
    * 整关变成"手酸"而不是"路长"。它要制造的是【节奏变化】，不是劝退。
    */
   roughMul: 1.6,
+  /**
+   * 下坡：不用蹬也在溜的速度下限（px/s），且电量不衰减。
+   * 它是整条路的「呼吸」—— 上坡憋着蹬，下坡松口气。
+   */
+  dhSpeed: 170,
+  /** 夜宵摊：停稳多久算「停一下」（毫秒） */
+  stallHoldMs: 800,
+  /** 停一下的奖励（电量）—— 歇一会儿，腿不酸了 */
+  stallBoost: 40,
   /** 前座 / 后座相对车身中心的水平偏移 */
   seatFront: -26,
   seatBack: 20,
@@ -111,6 +120,16 @@ export default class ScooterSystem {
     this.speed = 0;
     this.charge = 0;
 
+    /**
+     * 接人阶段：小兔一开始不在车上，在排练厅门口等。
+     * 没配 pickup 的关卡（或数据退化）→ 直接视为已接上，行为和旧版一致。
+     */
+    this.pickedUp = !this.cfg.pickup;
+
+    /** 夜宵摊的可选停靠（只发生一次） */
+    this._stallDone = false;
+    this._stallHold = 0;
+
     /** 房主广播过来的目标位置（只有跟着走的那一方会用到） */
     this._hostX = this.x;
     this._hostSpeed = 0;
@@ -142,8 +161,49 @@ export default class ScooterSystem {
     this.gfx = this.scene.add.graphics().setDepth(12);
     this.lampGfx = this.scene.add.graphics().setDepth(3);
     this._drawLamps();
+    this._drawStall();
     this._buildGestureHint();
     this._bindInput();
+  }
+
+  /**
+   * 夜宵摊：回程路边的一个暖色小摊。
+   * 不是机关，是可选的停靠点 —— 愿意停一下的人会得到一句台词和一口热气。
+   */
+  _drawStall() {
+    const st = this.cfg.stall;
+    if (!st) return;
+    const g = this.lampGfx;
+    const roadY = this.level.platforms[0]?.y ?? this.level.height;
+    const cx = st.x + (st.w ?? 200) / 2;
+    const top = roadY - 66;
+
+    // 摊身
+    g.fillStyle(0x3a2c20, 1);
+    g.fillRect(cx - 42, top + 22, 84, 44);
+    g.fillStyle(0x2a1f16, 1);
+    g.fillRect(cx - 42, top + 22, 84, 6);
+    // 台面
+    g.fillStyle(0x57402c, 1);
+    g.fillRect(cx - 46, top + 40, 92, 7);
+    // 雨棚（暖色条纹）
+    for (let i = 0; i < 5; i++) {
+      g.fillStyle(i % 2 ? 0x8a4a3a : 0xb46a4a, 1);
+      g.fillRect(cx - 45 + i * 18, top, 18, 12);
+    }
+    g.fillStyle(0x1d1712, 1);
+    g.fillRect(cx - 45, top + 10, 90, 3);
+    // 挂灯 + 光晕
+    for (let i = 3; i >= 1; i--) {
+      g.fillStyle(0xffd98a, 0.05 * i);
+      g.fillCircle(cx, top + 30, 22 * i);
+    }
+    g.fillStyle(0xffe6ae, 0.9);
+    g.fillCircle(cx, top + 30, 4);
+    // 锅（两个小圆）
+    g.fillStyle(0x1d2740, 1);
+    g.fillEllipse(cx - 16, top + 38, 22, 7);
+    g.fillEllipse(cx + 14, top + 38, 22, 7);
   }
 
   /** 路灯（含光晕）：这一关全部的氛围都靠它 */
@@ -240,9 +300,12 @@ export default class ScooterSystem {
     this._updateKeyboard();
 
     if (this.authoritative) {
-      const mul = this._inRough(this.x) ? this.cfg.roughMul : 1;
+      // 下坡：不衰减、有速度下限 —— 松手也在溜
+      const dh = this._inDownhill(this.x);
+      const mul = dh ? 0 : this._inRough(this.x) ? this.cfg.roughMul : 1;
       this.charge = Math.max(0, this.charge * Math.exp(-this.cfg.decay * mul * sec));
       this.speed = this.cfg.maxSpeed * (this.charge / 100);
+      if (dh) this.speed = Math.max(this.speed, this.cfg.dhSpeed);
 
       /**
        * 停在终点旗那儿就够了。
@@ -252,6 +315,8 @@ export default class ScooterSystem {
       const limit = this.level.goal.x;
       this.x = Phaser.Math.Clamp(this.x + this.speed * sec, 0, limit);
       if (this.x >= limit) this.charge = 0;
+
+      this._updateStall(sec);
 
       this._syncDue -= dt;
       if (this._syncDue <= 0 && net.isOnline && net.peerPresent) {
@@ -269,6 +334,7 @@ export default class ScooterSystem {
 
     this._wheel += (this.speed / 13) * sec;
 
+    this._updatePhase();
     this._seat(local, remote);
     this._draw();
 
@@ -303,26 +369,161 @@ export default class ScooterSystem {
     return false;
   }
 
-  /** 把角色【摆】到座位上 —— 车不走 physical collision，避免各种穿插 */
+  _inDownhill(x) {
+    for (const r of this.cfg.downhill ?? []) {
+      if (x >= r[0] && x <= r[1]) return true;
+    }
+    return false;
+  }
+
+  // ================================================================ 阶段演出
+
+  /** 接人 / 停摊的推进（两端各判一次，判定源是 x —— 天然同步） */
+  _updatePhase() {
+    const pickup = this.cfg.pickup;
+    if (pickup && !this.pickedUp && this.x >= pickup.x) {
+      this.pickedUp = true;
+      this._onPickup();
+    }
+  }
+
+  /** 接到她：车停一拍，她跳上后座 */
+  _onPickup() {
+    const pickup = this.cfg.pickup;
+    if (this.authoritative) this.charge = 0; // 停一拍，给台词留时间
+
+    this._floatText(
+      pickup.x,
+      (this.cfg.y ?? 0) - 96,
+      '来了。',
+      '#ffd98a',
+      26
+    );
+    this.onToast?.('她跳上了后座 —— 两个人蹬，快多了');
+  }
+
+  /** 夜宵摊：停稳一秒才算「停一下」 */
+  _updateStall(sec) {
+    const st = this.cfg.stall;
+    if (!st || this._stallDone) return;
+    const inside = this.x >= st.x && this.x <= st.x + (st.w ?? 200);
+    if (inside && this.speed < 15) {
+      this._stallHold += sec * 1000;
+      if (this._stallHold >= this.cfg.stallHoldMs) {
+        this._stallDone = true;
+        this._onStall();
+      }
+    } else {
+      this._stallHold = 0;
+    }
+  }
+
+  _onStall() {
+    const st = this.cfg.stall;
+    if (this.authoritative) {
+      this.charge = Math.min(100, this.charge + this.cfg.stallBoost);
+    }
+
+    const cx = st.x + (st.w ?? 200) / 2;
+    this._floatText(cx, (this.cfg.y ?? 0) - 96, '热乎的。', '#ffce8a', 22);
+    this.onToast?.('歇了一会儿，腿不酸了 —— 电量 +40');
+
+    // 一缕热气
+    const s = this.scene;
+    if (s.textures.exists('px')) {
+      for (let i = 0; i < 5; i++) {
+        const puff = s.add
+          .image(cx - 14 + i * 7, (this.cfg.y ?? 0) - 58, 'px')
+          .setTint(0xdfe8ff)
+          .setAlpha(0.35)
+          .setDepth(14)
+          .setScale(1 + i * 0.3);
+        s.tweens.add({
+          targets: puff,
+          y: puff.y - 34 - i * 6,
+          alpha: 0,
+          duration: 1400 + i * 160,
+          delay: i * 90,
+          onComplete: () => puff.destroy(),
+        });
+      }
+    }
+  }
+
+  /** 一句飘起来又淡掉的台词 */
+  _floatText(x, y, str, color = '#ffd98a', size = 22) {
+    const t = this.scene.add
+      .text(x, y, str, {
+        fontFamily: 'ui-monospace, monospace',
+        fontSize: `${size}px`,
+        color,
+      })
+      .setOrigin(0.5)
+      .setDepth(30);
+    this.scene.tweens.add({
+      targets: t,
+      y: y - 46,
+      alpha: { from: 1, to: 0 },
+      duration: 2400,
+      delay: 500,
+      ease: 'Sine.easeOut',
+      onComplete: () => t.destroy(),
+    });
+  }
+
+  /**
+   * 把角色【摆】到座位上 —— 车不走 physical collision，避免各种穿插。
+   *
+   * 座位按【角色】分，不按本地/远端分：
+   *   小熊 = 前座（骑车去接人的是他），小兔 = 后座。
+   *   这样联机两端看到的前后座是一致的（旧版按 local/remote 分，两端会镜像）。
+   *
+   * 接上之前：小兔站在排练厅门口等（重力照常、输入被 waitBoard 冻结）。
+   *   - 她自己的客户端：直接摆位（LocalPlayer）；
+   *   - 对方客户端：她的位置来自网络快照（源头就是"站着等"），不需要摆。
+   *     但为了两端绝对一致，这里也摆一下 —— 和快照值相同，不打架。
+   */
   _seat(local, remote) {
     const y = (this.cfg.y ?? 0) - this.cfg.seatLift;
-    const actors = this.coop ? [local, remote] : [local];
+    const roadY = this.level.platforms[0]?.y ?? this.level.height;
+    const pickup = this.cfg.pickup;
+
+    let actors = this.coop ? [local, remote] : [local];
+    // 独行模式：两个角色都是本地实体，后座那位也要参与"等/上车"
+    if (!this.coop && this.scene.soloPlay && this.scene.remote) {
+      actors = [local, this.scene.remote];
+    }
 
     for (const p of actors) {
       if (!p?.body) continue;
 
+      const isDriver = (p.role ?? 'bear') !== 'rabbit';
+
+      // 还没接到：后座那位在路边等
+      if (!isDriver && !this.pickedUp) {
+        if (p.mounted) {
+          p.mounted = false;
+          p.body.setAllowGravity(true);
+        }
+        p.waitBoard = true;
+
+        const wx = pickup ? pickup.x + 26 : p.x;
+        const wy = roadY - p.body.halfHeight;
+        // 必须用 body.reset()：直接写 sprite.x + body.position 会让两者的
+        // prev 记账错位，物理步进把旧位置写回去，人每帧 ±3000px 地抖
+        p.body.reset(wx, wy);
+        continue;
+      }
+
+      p.waitBoard = false;
       if (!p.mounted) {
         p.mounted = true;
         p.body.setAllowGravity(false);
         // LocalPlayer.update 会跳过输入控制，位置交给这里决定
       }
 
-      const seatX = this.x + (p === local ? this.cfg.seatFront : this.cfg.seatBack);
-      p.x = seatX;
-      p.y = y;
-      p.body.position.x = seatX - p.body.halfWidth;
-      p.body.position.y = y - p.body.halfHeight;
-      p.setVelocity(0, 0);
+      const seatX = this.x + (isDriver ? this.cfg.seatFront : this.cfg.seatBack);
+      p.body.reset(seatX, y);
     }
   }
 
