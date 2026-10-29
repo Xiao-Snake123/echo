@@ -8,6 +8,7 @@ import LanternSystem from '../entities/lantern.js';
 import PuzzleSystem from '../entities/puzzle.js';
 import RoseSystem from '../entities/rose.js';
 import { paintPlatform, paintDecor, buildBackdrop } from '../art/terrain.js';
+import { buildMemoryCard } from '../art/cards.js';
 import TouchControls from '../ui/TouchControls.js';
 import { net, NetEvents } from '../net/NetworkManager.js';
 import { LEVELS } from '../data/levels.js';
@@ -470,21 +471,39 @@ export default class LevelScene extends Phaser.Scene {
     // 第 5 关没有收集物（玩法全在雨里，收集物会把注意力抢走），
     // 所以这里必须允许关卡数据里根本没有 collectibles 这个字段。
     for (const c of this.level.collectibles ?? []) {
-      // 尺寸可被关卡数据覆盖：第 3 关的「课表格子」是 120×80 的大格子，不是小卡片
+      /**
+       * 记忆卡片：比人物小一圈的纸片卡，图案随关卡主题（见 art/cards.js）——
+       * UNO 牌 / 聊天气泡 / 课表。
+       * 判定区用一个全透明矩形（物理行为和旧版完全一致、落点稳定），
+       * 卡面是独立的视觉层挂在 vis 上，浮动/摇摆/消失动画都只动它。
+       * （不给 Container 直接挂静态 body：它的判定框按内容 bounds 生成，会偏。）
+       */
       const card = this.add
-        .rectangle(c.x, c.y, c.w ?? 22, c.h ?? 30, 0xf2c94c)
-        .setStrokeStyle(2, 0xffffff, 0.85)
+        .rectangle(c.x, c.y, c.w ?? 22, c.h ?? 30, 0, 0)
         .setDepth(6);
 
       this.physics.add.existing(card, true);
       card.itemId = c.id;
       card.itemDef = c;
 
-      // 轻微上下浮动，方便被发现
+      card.vis = this.add
+        .container(c.x, c.y, buildMemoryCard(this, this.level.id))
+        .setDepth(6)
+        .setAngle(Phaser.Math.Between(-5, 5));
+
+      // 轻微上下浮动 + 慢慢摇摆，方便被发现
       this.tweens.add({
-        targets: card,
-        y: c.y - 8,
+        targets: card.vis,
+        y: c.y - 7,
         duration: 1200,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+      this.tweens.add({
+        targets: card.vis,
+        angle: card.vis.angle - 4,
+        duration: 1600,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',
@@ -1476,18 +1495,21 @@ export default class LevelScene extends Phaser.Scene {
     const card = this.items.find((it) => it.itemId === id);
     if (card && card.active) {
       card.body.enable = false;
-      if (animate) {
+      const vis = card.vis;
+      if (animate && vis) {
+        // 卡片放大淡出 —— 判定区（隐形矩形）原地销毁，动画只动卡面
         this.tweens.add({
-          targets: card,
+          targets: vis,
           scale: 1.8,
           alpha: 0,
           duration: 260,
           ease: 'Quad.easeOut',
-          onComplete: () => card.destroy(),
+          onComplete: () => vis.destroy(),
         });
       } else {
-        card.destroy();
+        vis?.destroy();
       }
+      card.destroy();
     }
 
     this._refreshHud();
